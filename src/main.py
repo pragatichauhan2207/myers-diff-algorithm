@@ -99,11 +99,73 @@ def backtrack(trace, n, m):
     return edits
 
 
-def write_lines_diff(edits, lines_a, lines_b):
+def char_ranges(old, new):
+    # Myers on the characters of one paired - / + line.
+    # Returns the changed ranges as text: "3-5,9-12" or "." for none.
+    # "surrogateescape" keeps odd bytes as one character each instead of failing.
+    s1 = old.decode("utf-8", "surrogateescape")
+    s2 = new.decode("utf-8", "surrogateescape")
+
+    # Common start and end can never be changed, so skip them (faster).
+    limit = min(len(s1), len(s2))
+    p = 0
+    while p < limit and s1[p] == s2[p]:
+        p += 1
+    q = 0
+    while q < limit - p and s1[len(s1) - 1 - q] == s2[len(s2) - 1 - q]:
+        q += 1
+
+    mid_a = s1[p : len(s1) - q]
+    mid_b = s2[p : len(s2) - q]
+    edits = backtrack(myers_trace(mid_a, mid_b), len(mid_a), len(mid_b))
+
+    old_idx = [i + p for kind, i, _ in edits if kind == DELETE]
+    new_idx = [j + p for kind, _, j in edits if kind == INSERT]
+    return format_ranges(old_idx), format_ranges(new_idx)
+
+
+def format_ranges(indexes):
+    # indexes are increasing; touching ones merge into one range (3,4,5 -> 3-6).
+    if not indexes:
+        return "."
+    parts = []
+    start = prev = indexes[0]
+    for i in indexes[1:]:
+        if i != prev + 1:
+            parts.append(f"{start}-{prev + 1}")
+            start = i
+        prev = i
+    parts.append(f"{start}-{prev + 1}")
+    return ",".join(parts)
+
+
+def write_diff(edits, lines_a, lines_b, highlight):
     out = []
+    dels = []
+    inss = []
+
+    def flush():
+        # A change block: all - lines first, then all + lines.
+        # With highlight, each paired + line is followed by its ? line.
+        for i in dels:
+            out.append(b"-" + lines_a[i] + b"\n")
+        for pos, j in enumerate(inss):
+            out.append(b"+" + lines_b[j] + b"\n")
+            if highlight and pos < len(dels):
+                old_r, new_r = char_ranges(lines_a[dels[pos]], lines_b[j])
+                out.append(f"? {old_r} | {new_r}\n".encode())
+        dels.clear()
+        inss.clear()
+
     for kind, i, j in edits:
-        line = lines_b[j] if kind == INSERT else lines_a[i]
-        out.append(kind.encode() + line + b"\n")
+        if kind == KEEP:
+            flush()
+            out.append(b" " + lines_a[i] + b"\n")
+        elif kind == DELETE:
+            dels.append(i)
+        else:
+            inss.append(j)
+    flush()
     sys.stdout.buffer.write(b"".join(out))
 
 
@@ -127,7 +189,7 @@ def main() -> int:
 
     trace = myers_trace(a, b)
     edits = backtrack(trace, len(a), len(b))
-    write_lines_diff(edits, lines_a, lines_b)
+    write_diff(edits, lines_a, lines_b, command == "highlight")
     return 0
 
 
