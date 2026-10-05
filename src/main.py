@@ -21,6 +21,24 @@ def read_lines(path):
     return lines
 
 
+def intern_lines(lines_a, lines_b):
+    # table maps each distinct line (bytes) to a small integer id.
+    # ONE table for both files, so equal lines in A and B get the same id.
+    table = {}
+
+    def to_id(line):
+        if line not in table:
+            # A line we have not seen before gets the next free number:
+            # 0 for the first new line, 1 for the second, and so on.
+            table[line] = len(table)
+        return table[line]
+
+    # Convert every line of each file, keeping the original order.
+    a = [to_id(line) for line in lines_a]
+    b = [to_id(line) for line in lines_b]
+    return a, b
+
+
 def main() -> int:
     # sys.argv for: python src/main.py lines A.txt B.txt
     # is ["src/main.py", "lines", "A.txt", "B.txt"]; index 0 is the script.
@@ -43,9 +61,13 @@ def main() -> int:
         print(f"error: cannot read file: {err}", file=sys.stderr)
         return 2
 
-    # TEMPORARY debug (stderr only), so we can see the lines. Removed later.
-    print("A:", lines_a, file=sys.stderr)
-    print("B:", lines_b, file=sys.stderr)
+    # Lines -> integer ids. Myers will work on a and b.
+    # We keep lines_a / lines_b too, because printing needs the real bytes.
+    a, b = intern_lines(lines_a, lines_b)
+
+    # TEMPORARY debug (stderr only)
+    print("a:", a, file=sys.stderr)
+    print("b:", b, file=sys.stderr)
     return 0
 
 
