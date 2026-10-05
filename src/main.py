@@ -1,5 +1,9 @@
 import sys
 
+KEEP = " "
+DELETE = "-"
+INSERT = "+"
+
 
 def read_lines(path):
     with open(path, "rb") as f:
@@ -24,17 +28,21 @@ def intern_lines(lines_a, lines_b):
     return a, b
 
 
-def myers_distance(a, b):
+def myers_trace(a, b):
     n = len(a)
     m = len(b)
     max_d = n + m
 
-    # k runs from -max_d to +max_d; V[k] is stored at v[offset + k]
-    # because Python lists cannot use negative indices here.
+    # V[k] is stored at v[offset + k] so negative k works as a list index.
     offset = max_d + 1
     v = [0] * (2 * max_d + 3)
 
+    # trace[d] is the slice of v (k from -d-1 to d+1) at the start of round d.
+    trace = []
+
     for d in range(max_d + 1):
+        trace.append(v[offset - d - 1 : offset + d + 2])
+
         for k in range(-d, d + 1, 2):
             if k == -d or (k != d and v[offset + k - 1] < v[offset + k + 1]):
                 x = v[offset + k + 1]
@@ -49,9 +57,43 @@ def myers_distance(a, b):
             v[offset + k] = x
 
             if x >= n and y >= m:
-                return d
+                return trace
 
-    return max_d
+    return trace
+
+
+def backtrack(trace, n, m):
+    edits = []
+    x, y = n, m
+
+    for d in range(len(trace) - 1, -1, -1):
+        snap = trace[d]
+        k = x - y
+
+        # V[k] sits at snap[k + d + 1]
+        if k == -d or (k != d and snap[k - 1 + d + 1] < snap[k + 1 + d + 1]):
+            prev_k = k + 1
+        else:
+            prev_k = k - 1
+
+        prev_x = snap[prev_k + d + 1]
+        prev_y = prev_x - prev_k
+
+        while x > prev_x and y > prev_y:
+            edits.append((KEEP, x - 1, y - 1))
+            x -= 1
+            y -= 1
+
+        if d > 0:
+            if x == prev_x:
+                edits.append((INSERT, None, prev_y))
+            else:
+                edits.append((DELETE, prev_x, None))
+
+        x, y = prev_x, prev_y
+
+    edits.reverse()
+    return edits
 
 
 def main() -> int:
@@ -72,8 +114,13 @@ def main() -> int:
 
     a, b = intern_lines(lines_a, lines_b)
 
-    d = myers_distance(a, b)
-    print("D =", d, file=sys.stderr)   # TEMPORARY debug (stderr only)
+    trace = myers_trace(a, b)
+    edits = backtrack(trace, len(a), len(b))
+
+    # TEMPORARY debug (stderr only)
+    for kind, i, j in edits:
+        line = lines_b[j] if kind == INSERT else lines_a[i]
+        print(kind + repr(line), file=sys.stderr)
     return 0
 
 
