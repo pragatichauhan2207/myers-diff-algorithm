@@ -96,6 +96,14 @@ def backtrack(trace, n, m):
     return edits
 
 
+def write_lines_diff(edits, lines_a, lines_b):
+    out = []
+    for kind, i, j in edits:
+        line = lines_b[j] if kind == INSERT else lines_a[i]
+        out.append(kind.encode() + line + b"\n")
+    sys.stdout.buffer.write(b"".join(out))
+
+
 def main() -> int:
     if len(sys.argv) != 4 or sys.argv[1] not in ("lines", "highlight"):
         print("usage: main.py lines|highlight FILE_A FILE_B", file=sys.stderr)
@@ -116,11 +124,7 @@ def main() -> int:
 
     trace = myers_trace(a, b)
     edits = backtrack(trace, len(a), len(b))
-
-    # TEMPORARY debug (stderr only)
-    for kind, i, j in edits:
-        line = lines_b[j] if kind == INSERT else lines_a[i]
-        print(kind + repr(line), file=sys.stderr)
+    write_lines_diff(edits, lines_a, lines_b)
     return 0
 
 
