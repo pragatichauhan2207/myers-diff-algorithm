@@ -1,4 +1,5 @@
 import sys
+from array import array
 
 KEEP = " "
 DELETE = "-"
@@ -37,11 +38,13 @@ def myers_trace(a, b):
     offset = max_d + 1
     v = [0] * (2 * max_d + 3)
 
-    # trace[d] is the slice of v (k from -d-1 to d+1) at the start of round d.
+    # trace[d] keeps v at the start of round d, only for k = -d-1, -d+1, ..., d+1.
+    # Round d reads only these (same parity), so every 2nd entry is enough.
+    # array('i') uses 4 bytes per value instead of a list's 8 + int object.
     trace = []
 
     for d in range(max_d + 1):
-        trace.append(v[offset - d - 1 : offset + d + 2])
+        trace.append(array("i", v[offset - d - 1 : offset + d + 2 : 2]))
 
         for k in range(-d, d + 1, 2):
             if k == -d or (k != d and v[offset + k - 1] < v[offset + k + 1]):
@@ -70,13 +73,13 @@ def backtrack(trace, n, m):
         snap = trace[d]
         k = x - y
 
-        # V[k] sits at snap[k + d + 1]
-        if k == -d or (k != d and snap[k - 1 + d + 1] < snap[k + 1 + d + 1]):
+        # V[k] sits at snap[(k + d + 1) // 2]
+        if k == -d or (k != d and snap[(k + d) // 2] < snap[(k + d + 2) // 2]):
             prev_k = k + 1
         else:
             prev_k = k - 1
 
-        prev_x = snap[prev_k + d + 1]
+        prev_x = snap[(prev_k + d + 1) // 2]
         prev_y = prev_x - prev_k
 
         while x > prev_x and y > prev_y:
